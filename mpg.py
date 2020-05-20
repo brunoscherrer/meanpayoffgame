@@ -7,6 +7,7 @@ import numpy as np
 from fractions import Fraction
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle,Circle
+import matplotlib.patheffects as path_effects
 import colorsys
 import os
 import sys
@@ -29,6 +30,8 @@ class state:
 
 class mp_game:   
 
+    # basic
+    
     def __init__(self, nb_states, param, intmax=100):
 
         self.nb_states = nb_states
@@ -48,6 +51,8 @@ class mp_game:
             print(i,' ',end='')
             self.states[i].show()
 
+
+    # policy analysis, policy iteration (1 and 2 players)
             
     def analyze_policy(self, pol, verbose=False): # returns paths and cycles for each starting state
 
@@ -118,7 +123,7 @@ class mp_game:
         return cycles, c_v, path, p_v, cycle
 
 
-    def value_potential(self, pol): # compute the value and potential
+    def value_potential(self, pol): # compute the value and potential of a policy (useful for PI)
 
         v = []
         cycles, c_v, path, p_v, cycle = self.analyze_policy(pol)
@@ -129,37 +134,6 @@ class mp_game:
             
         return(v)
 
-
-    def value_iteration(self, T, iv=[]):
-        
-        v = zeros( (T+1, self.nb_players, self.nb_states) )
-        if iv!=[]:
-            for k in range(self.nb_players):
-                v[T,k,:] = iv
-        pol = zeros ( (T, self.nb_states), dtype=int )
-
-        
-        for t in range(T-1,-1,-1):
-            
-            for i in range(self.nb_states):
-
-                state = self.states[i]
-                owner = state.owner
-
-                qmin, jmin, amin = infty, -1, -1          # owner's state chooses the best action amin that leads to state jmin (with value for player k equal to qmin)
-                for a in range(len(state.next_states)):
-                    j = state.next_states[ a ]
-                    q = state.costs[ owner,a ] + self.gamma * v[ t+1, owner, j ]
-        
-                    if q<qmin:
-                        qmin, jmin, amin = q, j, a
-                        
-                pol[ t, i ] = amin    # store the action
-                        
-                for k in range(self.nb_players):      # compute the values for everybody
-                    v[ t, k, i ] = state.costs[ k, amin ] +  v[ t+1, k, jmin ]
-
-        return v, pol  
     
     
     def pi_greedy_policy(self, v, pol, player):
@@ -178,7 +152,6 @@ class mp_game:
                 pol2[i] = aopt
                     
         return pol2
-
     
     
     def one_player_policy_iteration(self, player=1, pol=[], policy_list=None):
@@ -231,22 +204,74 @@ class mp_game:
 
         return v, pol
 
-
-    def plot(self, ax, pol=None, cc=None):
-
-        lx,ly=g.range
-
-        if cc!=None:
-            cycles,cycle=cc
-            colors = [ colorsys.hsv_to_rgb( x, 1.0, 0.8 ) for x in np.arange(0.0,1.0, 1.0/len(cycles) ) ]
-            for i in range(self.nb_states):
-                x,y = self.pos[i]
-                if i in cycles[cycle[i]]:
-                    a=0.3
-                else:
-                    a=0.2
-                ax.add_patch(Rectangle( (x-.5,y-.5),1,1, color=colors[cycle[i]], alpha=a, linewidth=0) )
+    
+    # value iteration
+    
+    def value_iteration(self, T, v=[]):
         
+        if v==[]:
+            v = [0]*self.nb_states
+
+        pol_seq = []
+        v_seq = []
+        
+        for t in range(T-1,-1,-1):
+
+            pol = []
+            v2 = []
+            
+            for i in range(self.nb_states):
+
+                state = self.states[i]
+                owner = state.owner
+
+                lv =  [ v[ state.next_states[a] ]  for a in range(len(state.next_states)) ]
+                if state.owner == 0:
+                    qopt = min( lv )
+                elif state.owner == 1:
+                    qopt = max( lv )
+                    
+                pol.append( lv.index(qopt) )
+                v2.append( state.cost + qopt )
+                
+            v_seq.append(v2)
+            pol_seq.append(pol)
+
+            v = v2
+
+        pol_seq.reverse() # put it in the right order
+        
+        return v_seq, pol_seq  
+
+
+    def trajectory(self, i, pol_seq): # generate a trajectory from finite horizon policy pol_seq
+
+        traj = [i]
+        for t in range(len(pol_seq)): # backward in time
+            i = self.states[i].next_states[ pol_seq[t][i] ]
+            traj.append(i)
+        return traj
+        
+
+    def plot_cycle_regions(self, ax, cycles,cycle):
+
+        lx,ly=self.range
+        ax.axis('off')
+        plt.tight_layout()
+        
+        colors = [ colorsys.hsv_to_rgb( x, 1.0, 0.8 ) for x in np.arange(0.0,1.0, 1.0/len(cycles) ) ]
+        for i in range(self.nb_states):
+            x,y = self.pos[i]
+            if i in cycles[cycle[i]]:
+                a=0.4
+            else:
+                a=0.1
+            ax.add_patch(Rectangle( (x-.5,y-.5),1,1, color=colors[cycle[i]], alpha=a, linewidth=0) )
+            
+    def plot_policy(self, ax, pol): # plot a stationary policy
+
+        lx,ly=self.range
+
         RAYON=0.25
         ax.axis('off')
         plt.xlim(-1,lx)
@@ -265,12 +290,26 @@ class mp_game:
                 x2,y2 = self.pos[j]
                 dx,dy=x2-x,y2-y
                 if pol!=None and state.next_states[ pol[i] ]==j:
-                    plt.arrow( x+RAYON*dx, y+RAYON*dy, dx/2.5, dy/2.5, color='black',lw=2, head_width=0.1,zorder=1)
+                    plt.arrow( x+RAYON*dx, y+RAYON*dy, dx/2.5, dy/2.5, color='black',lw=1, head_width=0.1,zorder=1)
                 else:
-                    plt.arrow( x+RAYON*dx, y+RAYON*dy, dx/2.5, dy/2.5, color='grey', lw=1, head_width=0.1,zorder=0)
-        plt.tight_layout()
+                    plt.arrow( x+RAYON*dx, y+RAYON*dy, dx/2.5, dy/2.5, color='black', alpha=0.1, lw=1, head_width=0.1,zorder=0)
 
-                    
+
+    def plot_trajectory(self, ax, traj, T=None, color='black'):
+
+        l = len(traj)
+        if T==None:
+            T=l
+        
+        lx,ly = [],[]
+        dec = 2*np.pi/T
+        for t in range(l):
+            x,y = self.pos[ traj[t] ]
+            angle = (T-t)*dec
+            lx.append(x+0.25*np.cos(angle))
+            ly.append(y+0.25*np.sin(angle))
+
+        plt.plot(lx,ly, color=color, lw=2, path_effects=[path_effects.Stroke(linewidth=3, foreground='white'), path_effects.Normal()])
                 
                 
 def planar_mp_game(lx, ly, nb_actions, intmax=100):
@@ -352,8 +391,50 @@ def test_2():
                 cycles, c_v, path, p_v, cycle = g.analyze_policy( pol )
                 fig = plt.figure(figsize=(x,y))
                 ax = fig.add_subplot(111)
-                g.plot(ax,pol,(cycles,cycle))
-                plt.savefig("fig/%d_%03d.png"%(i,j))
+                g.plot_cycle_regions(ax, cycles,cycle)
+                g.plot_policy(ax, pol)
+                plt.savefig("pi/%d_%03d.png"%(i,j))
                 plt.close()
                 j+=1
             print()
+
+
+
+os.system('rm vi/*')
+x,y = 20,20
+seed(0)
+g=planar_mp_game(x,y,3,100)
+
+# résolution exacte par PI et détermination des cycles optimaux
+v,pol = g.policy_iteration(player=1)
+cycles, c_v, path, p_v, cycle = g.analyze_policy( pol )
+
+fig = plt.figure(figsize=(8,8))
+ax = fig.add_subplot(111)
+g.plot_cycle_regions(ax, cycles, cycle)
+g.plot_policy(ax, pol)
+plt.savefig("vi/opt.png")
+plt.close()
+
+# résolution par VI
+T = 40
+v_seq, pol_seq = g.value_iteration(T)
+
+colors = [ colorsys.hsv_to_rgb( x, 1.0, 0.8 ) for x in np.arange(0.0,1.0, 1.0/len(cycles) ) ]
+
+for t in range(1,T):
+
+    print(t)
+    fig = plt.figure(figsize=(8,8))
+    ax = fig.add_subplot(111)
+
+    g.plot_cycle_regions(ax, cycles, cycle)
+
+    for j in range(len(cycles)):
+        i=cycles[j][0]
+        traj = g.trajectory(i, pol_seq[T-t:])
+        g.plot_trajectory(ax, traj, T=T, color=colors[j])
+
+    plt.savefig("vi/%03d.png"%t)
+    plt.close()
+
