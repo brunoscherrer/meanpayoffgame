@@ -4,11 +4,12 @@
 
 from random import seed, randint, sample
 import numpy as np
-from fractions import Fraction
+from fractions import Fraction # for exact calculation
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle,Circle
 import matplotlib.patheffects as path_effects
-import colorsys
+import matplotlib.cm as cm
+#import colorsys
 import os
 import sys
 
@@ -23,7 +24,7 @@ class state:
         self.next_states = next_states
         self.cost = cost
 
-    def show(self):
+    def print(self):
         print("owner:",self.owner,"->",self.next_states,"c:",self.cost)
 
 
@@ -44,12 +45,12 @@ class mp_game:
                                  randint(0,intmax) )   # costs
                             for i in range(nb_states) ]
 
-    def show(self):
+    def print(self):
 
         print(self.nb_states,"states")
         for i in range(self.nb_states):
             print(i,' ',end='')
-            self.states[i].show()
+            self.states[i].print()
 
 
     # policy analysis, policy iteration (1 and 2 players)
@@ -113,7 +114,7 @@ class mp_game:
 
                 costs.append( self.states[i].cost )  
                 traj.append(i)
-
+        
         if verbose:
             for i in range(len(cycles)):
                 print("cycle",i,":", cycles[i], c_v[i])
@@ -253,27 +254,45 @@ class mp_game:
         return traj
         
 
-    def plot_cycle_regions(self, ax, cycles,cycle):
+    def get_ax(self):
 
-        lx,ly=self.range
+        fig = plt.figure(figsize=(8,8))
+        ax = fig.add_subplot(111)
         ax.axis('off')
-        plt.tight_layout()
+        return(ax)
+
+    def savefig_and_close(self,f):
         
-        colors = [ colorsys.hsv_to_rgb( x, 1.0, 0.8 ) for x in np.arange(0.0,1.0, 1.0/len(cycles) ) ]
+        plt.savefig(f)
+        plt.close()
+
+        
+    def plot_cycle_regions(self, ax, cycles,cycle,c_v):
+
+        lx,ly=self.range        
+
+        ord = np.argsort(c_v)
+        cmap = cm.get_cmap('autumn')
+        if len(cycles)==1:
+            colors = [cmap(0.5)]
+        else:
+            colors = [ cmap( float(ord[i])/(len(cycles)-1) )  for i in range(len(cycles)) ] 
+        
         for i in range(self.nb_states):
             x,y = self.pos[i]
             if i in cycles[cycle[i]]:
                 a=0.4
             else:
-                a=0.1
+                a=0.2
             ax.add_patch(Rectangle( (x-.5,y-.5),1,1, color=colors[cycle[i]], alpha=a, linewidth=0) )
+
+        plt.tight_layout()
             
-    def plot_policy(self, ax, pol): # plot a stationary policy
+    def plot_graph(self, ax, pol): # plot a stationary policy
 
         lx,ly=self.range
 
         RAYON=0.25
-        ax.axis('off')
         plt.xlim(-1,lx)
         plt.ylim(-1,ly)
 
@@ -294,7 +313,8 @@ class mp_game:
                 else:
                     plt.arrow( x+RAYON*dx, y+RAYON*dy, dx/2.5, dy/2.5, color='black', alpha=0.1, lw=1, head_width=0.1,zorder=0)
 
-
+        plt.tight_layout()
+                    
     def plot_trajectory(self, ax, traj, T=None, color='black'):
 
         l = len(traj)
@@ -309,8 +329,9 @@ class mp_game:
             lx.append(x+0.25*np.cos(angle))
             ly.append(y+0.25*np.sin(angle))
 
-        plt.plot(lx,ly, color=color, lw=2, path_effects=[path_effects.Stroke(linewidth=3, foreground='white'), path_effects.Normal()])
-                
+        plt.plot(lx,ly, color=color, lw=2, path_effects=[path_effects.Stroke(linewidth=3, foreground='black'), path_effects.Normal()])
+
+        plt.tight_layout()
                 
 def planar_mp_game(lx, ly, nb_actions, intmax=100):
 
@@ -324,7 +345,7 @@ def planar_mp_game(lx, ly, nb_actions, intmax=100):
                     if (dx,dy)!=(0,0) and 0<=x2<lx and 0<=y2<ly:
                         neighbors.append(x2*ly+y2)
             i=x*ly+y
-            param.append( state( randint(0,1),  sample(neighbors, min(nb_actions,len(neighbors))),  randint(0,intmax)  ) )
+            param.append( state( randint(0,1),  sample(neighbors, min(nb_actions,len(neighbors))),  pow(2,randint(0,intmax))  ) )
 
     g =  mp_game(lx*ly, param)
     g.pos=dict()
@@ -358,24 +379,27 @@ def test_1():
     for i in range(0,10000):
         seed(i)
         g = mp_game(20,4,100)
-        #g.show()
+        #g.print()
         v,pol = g.policy_iteration(player=1)
         cycles, c_v, path, p_v, cycle = g.analyze_policy( pol )
         if len(cycles)>5:
             print(i)
-            g.show()
+            g.print()
             print('policy:',pol)
             cycles, c_v, path, p_v, cycle = g.analyze_policy( pol, verbose=True )
 
 
 def test_2():
 
-    x,y=8,8   
+    x,y = 4,4   
     max_len=0
+
+    os.system('rm pi/*')
+    
     for i in range(10000):
         print(i,end='\r')
         seed(i)
-        g=planar_mp_game(x,y,3,100)
+        g=planar_mp_game(x,y,3,20)
         policy_list = []
         v,pol = g.policy_iteration(player=1,  policy_list=policy_list)
 
@@ -389,52 +413,77 @@ def test_2():
                 print(j,end=',')
                 sys.stdout.flush()
                 cycles, c_v, path, p_v, cycle = g.analyze_policy( pol )
-                fig = plt.figure(figsize=(x,y))
-                ax = fig.add_subplot(111)
-                g.plot_cycle_regions(ax, cycles,cycle)
-                g.plot_policy(ax, pol)
-                plt.savefig("pi/%d_%03d.png"%(i,j))
-                plt.close()
+                ax = g.get_ax()
+                g.plot_cycle_regions(ax, cycles,cycle,c_v)
+                g.plot_graph(ax, pol)
+                g.savefig_and_close("pi/%d_%03d.png"%(i,j))
                 j+=1
             print()
 
 
+def test_3():
+    
+    X = True
 
-os.system('rm vi/*')
-x,y = 20,20
-seed(0)
-g=planar_mp_game(x,y,3,100)
+    for sd in [2]:#range(100):
 
-# résolution exacte par PI et détermination des cycles optimaux
-v,pol = g.policy_iteration(player=1)
-cycles, c_v, path, p_v, cycle = g.analyze_policy( pol )
+        x,y = 5,5
+        seed(sd)
+        print('seed:',sd)
 
-fig = plt.figure(figsize=(8,8))
-ax = fig.add_subplot(111)
-g.plot_cycle_regions(ax, cycles, cycle)
-g.plot_policy(ax, pol)
-plt.savefig("vi/opt.png")
-plt.close()
+        g=planar_mp_game(x,y,3,20)
 
-# résolution par VI
-T = 40
-v_seq, pol_seq = g.value_iteration(T)
+        # résolution exacte par PI et détermination des cycles optimaux
+        v,pol = g.policy_iteration(player=1)
+        cycles, c_v, path, p_v, cycle = g.analyze_policy( pol )
 
-colors = [ colorsys.hsv_to_rgb( x, 1.0, 0.8 ) for x in np.arange(0.0,1.0, 1.0/len(cycles) ) ]
 
-for t in range(1,T):
+        if X:
+            os.system('rm vi/*')
+            ax = g.get_ax()
+            g.plot_cycle_regions(ax, cycles, cycle, c_v)
+            g.plot_graph(ax, pol)
+            g.savefig_and_close("vi/opt.png")
 
-    print(t)
-    fig = plt.figure(figsize=(8,8))
-    ax = fig.add_subplot(111)
+        # résolution par VI
+        T = 1000
+        v_seq, pol_seq = g.value_iteration(T)
 
-    g.plot_cycle_regions(ax, cycles, cycle)
+        if X:
+            ord = np.argsort(c_v)
+            cmap = cm.get_cmap('autumn')
+            if len(cycles)==1:
+                colors = [ cmap(0.5) ]
+            else:
+                colors = [ cmap( float(ord[i])/(len(cycles)-1) )  for i in range(len(cycles)) ]
 
-    for j in range(len(cycles)):
-        i=cycles[j][0]
-        traj = g.trajectory(i, pol_seq[T-t:])
-        g.plot_trajectory(ax, traj, T=T, color=colors[j])
 
-    plt.savefig("vi/%03d.png"%t)
-    plt.close()
+        for c in cycles:
+            i=c[0]
+            traj = g.trajectory(i, pol_seq )
+            if traj[:len(c)]!=c:
+                print(traj,c)    ############################## faire de l'analyse de chemin...
 
+        if X:
+
+            for t in range(1,T):
+
+                print(t,',',end='')
+                sys.stdout.flush()
+                
+                ax = g.get_ax()
+                g.plot_cycle_regions(ax, cycles, cycle, c_v)
+
+                for j in range(len(cycles)):
+                    i=cycles[j][0]
+                    traj = g.trajectory(i, pol_seq[T-t:])
+                    g.plot_trajectory(ax, traj, T=T, color=colors[j])
+                    g.plot_graph(ax, pol_seq[T-t])
+
+                plt.savefig("vi/%03d.png"%t)
+                plt.close()
+
+
+
+
+test_3()
