@@ -1,0 +1,207 @@
+\documentclass{article}
+\usepackage{fullpage}
+\usepackage[utf8x]{inputenc}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{amsmath}
+\usepackage{hyperref}
+\usepackage{cleveref}
+\usepackage{autonum}
+\usepackage{dsfont}
+\usepackage{stmaryrd}
+
+\newtheorem{theorem}{Théorème}
+\newtheorem{lemma}{Lemme}
+\newtheorem{remark}{Remarque}
+\newtheorem{corollary}{Corollaire}
+
+\title{Un algorithme fortement polynomial pour les jeux de Markov déterministes (et les jeux de parité)}
+
+\author{Bruno Scherrer}
+\def\1{{\mathds 1}}
+\def\G{{\cal G}}
+\def\C{{\cal C}}
+\def\Ent{\mathbb N}
+\def\R{\mathbb R}
+\def\N{\mathfrak N}
+\def\M{\mathfrak M}
+\def\greed{\mathfrak G}
+\newcommand{\suc}[1]{f(#1)}
+
+\def\={\stackrel{def}{=}}
+\newcommand{\intset}[1]{\llbracket #1 \rrbracket}
+\newcommand{\intpart}[1]{\lceil #1 \rceil}
+
+\begin{document}
+\maketitle
+
+
+\section{Introduction}
+
+Considérons un jeu séquentiel à 2 joueurs, ``max'' et ``min'', sur un graphe orienté ayant $n$ n{\oe}uds/états. Cet ensemble d'états $X$ est partitionné en 2 sous-ensembles $X_{max}$ et $X_{min}$ correspondant aux états contrôlés par chacun des 2 joueurs. A chaque état $x \in X$ est associé une récompense $r(x) \in \R$ et on note $\suc{x}=\{y;(x,y)\}$ l'ensemble des états qui peuvent être atteints à partir de $x$ en suivant une arête (on suppose que la structure des graphe est telle que cet ensemble est toujours non-vide). Le jeu commence dans un état $x_0$. A chaque instant $t \ge 0$, le joueur qui contrôle l'état courant $x_t$ choisit un état suivant $x_{t+1}$ dans $\suc{x_t}$; ces choix successifs induisent une trajectoire infinie sur $X$. La \emph{valeur} de cette trajectoire est la somme $\gamma$-actualisée ($\gamma \in [0,1[$) des récompenses le long de cette trajctoire:
+\begin{align}
+\sum_{t=0}^{\infty} \gamma^t c(x_t).
+\end{align}
+Le but du joueur max est de maximiser cette quantité, tandis que celui du joueur min est de la minimiser. Ce jeu est connu dans la littérature sous le nom de \emph{Jeu de Markov déterministe} ($\gamma$-actualisé).
+
+Soient $\Pi_{max}$ et $\Pi_{min}$ les ensembles de stratégies \emph{stationnaires déterministes} pour les deux joueurs :
+\begin{align}
+  \Pi_{max} & = \left\{ \mu:X_{max} \to X ~;~ \forall x \in X_{max},~ \mu(x) \in \suc{x} \right\}\\
+  \Pi_{min} & = \left\{ \nu:X_{min} \to X ~;~ \forall x \in X_{min},~ \nu(x) \in \suc{x} \right\}.
+\end{align}
+Soit de plus $\Pi=\Pi_{max}\times \Pi_{min}$ l'ensemble des couples de telles stratégies.
+
+Supposons que les états sont numérotés de $1$ à $n$. Identifions toute fonction de $X$ vers $\R$ à un vecteur de $\R^n=\R^{|X|}$. Prenons un couple de stratégies $(\mu,\nu) \in \Pi$. On notera $P_{\mu,\nu}$ la matrice de transition induite par ce choix de stratégies:
+\begin{align}
+  \forall x \in X_{max},~~  P_{\mu,\nu}(x,y) &= \1_{y=\mu(x)} \\
+  \forall x \in X_{min},~~  P_{\mu,\nu}(x,y) &= \1_{y=\nu(x)}. 
+\end{align}
+On note $T_{\mu,\nu}$ l'opérateur affine de Bellman associé au couple de stratégies $(\mu,\nu)$:
+\begin{align}
+\forall v \in \R^n,~~  T_{\mu,\nu} v & = r + \gamma P_{\mu,\nu} v.
+\end{align}
+Il est connu (et assez facile de voir) que cet opérateur a pour unique point fixe une fonction qui à tout état $x$ associe la valeur de la trajectoire induite par $(\mu,\nu)$, fonction que nous noterons $v_{\mu,\nu}$. 
+
+On introduit de plus les trois opérateurs de Bellman suivants:
+\begin{align}
+\forall \mu \in \Pi_{max},~ \forall v \in \R^n,~~  T_{\mu} v & = \min_\nu T_{\mu,\nu} v, \\
+\forall \nu \in \Pi_{min},~ \forall v \in \R^n,~~  \tilde T_{\nu} v & = \max_\mu T_{\mu,\nu} v, \\
+\forall v \in \R^n,~~  T v &= \max_\mu T_\mu v = \min_\nu \tilde T_\nu v,
+\end{align}
+où les min et max de vecteurs sont effectués composante par composante. L'égalité entre les deux formulations du dernier opérateur est une conséquence bien connue du théorème du minimax de Von Neumann.
+
+Il est bien connu que la valeur d'équilibre du jeu pour un état initial $x$ est $v_*(x)$ où $v_*$ est l'unique point fixe de l'opérateur $T$. Par ailleurs, tout couple de stratégies stationnaires $(\mu_*,\nu_*)$ satisfaisant
+$$
+v_* = T_{\mu_*}v_* = \tilde T_{\nu_*} v_* = T_{\mu_*,\nu_*}v_*.
+$$
+est un couple de stratégies optimales qui atteint cette valeur d'équilibre et constitue ainsi une solution au jeu. En supposant un ordre (arbitraire) sur les états lorsqu'on choisit les argmin et argmax, on peut toujours faire en sorte que le couple de stratégies optimales soit unique.
+
+
+
+\section{Algorithme}
+
+L'algorithme que nous allons considérer peut être vu comme une variation de l'algorithme \emph{itérations sur les politiques} de Howard. On se place du point de vue du joueur max, et on va itérer dans l'espace des politiques périodiques:
+$$
+\mu^{(k)} = ( \mu^{(k)}_0, \mu^{(k)}_1, \dots, \mu^{(k)}_{p_k-1} ).
+$$
+Initialiement, on choisit une politique quelconque (on peut par exemple prendre n'importe quelle politique stationnaire).
+
+A chaque itération $k$, on effectue successivement les deux étapes suivantes.
+\begin{itemize}
+\item {\bf Evaluation de la politique:} On calcule la valeur de la politique $\mu^{(k)}$ lorsqu'il joue contre son meilleur adversaire. C'est un problème de décision déterministe 1-joueur dont l'unique solution de l'équation \emph{point-fixe},
+\begin{align}
+v_k = T_{\mu^{(k)}_0} T_{\mu^{(k)}_1} \dots T_{\mu^{(k)}_{p_k-1}} v_k.
+\end{align}
+\item {\bf Détermination d'une nouvelle politique:} On considère un jeu auxiliaire à horizon fini $n$, de valeur terminale $v_k$, dont on calcule la valeur optimale $w_0$ et le couple de stratégies optimales
+  \begin{align}
+    \big( (\mu_0,\mu_1,\dots,\mu_{n-1}),(\nu_0,\nu_1,\dots,\nu_{n-1}) \big)
+  \end{align}
+  avec $n$ étapes de l'algorithme \emph{itération sur les valeurs}:
+\begin{align}
+  w_n & = v_k,\\
+\forall j \in \{0,1,\dots,n-1\},~~  w_j & = T w_{j+1} = T_{\mu_j} w_{j+1} = \tilde T_{\nu_j} w_{j+1} = T_{\mu_{j},\nu_{j}} w_{j+1}.
+\end{align}
+Pour chaque état initial $x$, le couple de stratégies optimales induit un chemin min-max optimal $(x=y_0, y_1, y_2, \dots y_n)$ pour le problème auxiliaire. Considérons l'ensemble des ``boucles'' des chemins partant de $x$:
+$$
+B_x = \{ (y, i,j)~;~ 0\le i<j \le n \mbox{ tels que }y_i=y_j=y \}.
+$$
+Par le principe des tiroirs cet ensemble contient toujours au moins un élément.
+A chaque boucle $(y, i,j) \in B_x$, on associe le score:
+$$
+w_i(y)-w_j(y).
+$$
+Comme nous le verrons plus loin, ce score est nécessairement positif ou nul.
+S'il existe un état $x$ dont une boucle $(y, i,j)$ a un score \emph{strictement} positif, alors on peut prendre comme prochaine politique non-stationnaire à évaluer
+$$
+\mu^{(k+1)} = (\mu_i,\mu_{i+1},\dots,\mu_{j-1}).
+$$
+Sinon, l'algorithme est terminé et on renvoie la valeur $w_0$ qui est, comme nous allons le prouver, égale à la valeur optimale $v_*$.
+\end{itemize}
+
+
+\section{Exactitude de l'algorithme}
+
+
+
+\begin{lemma}
+  A chaque itération $k$, pour tout état initial $x$, pour toute boucle $(y,i,j) \in B_x$, le score $w_i(y)-w_j(y)$ d'une boucle est positif.
+\end{lemma}
+\begin{proof}
+  Pour tout $j \in {0,1,\dots,n-1}$,
+  \begin{align}
+    w_j & = T^{n-j}v_j  \\
+    & = T_{\mu_{j}} T_{\mu_{j+1}} \dots T_{\mu_{n-1}} (T_{\mu^{(k)}})^\infty 0.
+  \end{align}
+\end{proof}
+
+\begin{lemma}
+La séquence de fonctions $(v_k)$ est croissante (à chaque étape, la croissance est stricte pour au moins un état $x$).
+\end{lemma}
+
+\begin{lemma}
+  score nul équivaut à satisfaction de l'équation de Bellman
+\end{lemma}
+
+
+\section{Nombre d'itérations}
+
+\begin{align}
+  \Pi = \cup_c \Pi_c = \cup_{x,c} \Pi_c(x)
+\end{align}
+
+On considère des politiques non-stationnaires:
+\begin{align}
+  \M_c(x) & = \left\{ \mu ; (\mu,M(\mu)) \in \Pi_c(x)\right\} \\
+  \N_c(x) & = \left\{ \nu ; (N(\nu),\nu) \in \Pi_c(x)\right\} 
+\end{align}
+
+\begin{align}
+v_c(x) &= \max_{\mu \in \M_c(x)} v_{\mu}(x)\\
+\tilde v_c(x) & = \min_{\nu \in \N_c(x)} \tilde v_{\nu}(x)
+\end{align}
+
+Par construction, il est clair que pour tout $c$, 
+\begin{align}
+\forall x,~~ v_c(x) &\le \tilde v_c(x), \\
+\forall x \in \C(\mu^*,\nu^*),~~v_c(x) &\le v^*(x) \le \tilde v_c(x).
+\end{align}
+
+\begin{lemma}
+  Pour tout $v$, pour tout $(\mu,\nu) \in \Pi_c$,
+  \begin{align}
+    v_{\mu,\nu} - v & = [I-(\gamma P_{\mu,\nu})^c]^{-1}(T_{\mu,\nu}v - v).
+  \end{align}
+  Pour tout $v$, pour tout $(\mu,\nu) \in \Pi_c(x)$,
+  \begin{align}
+  \1_x'(v_{\mu,\nu} - v) = \frac{1}{1-\gamma^c} \1_x'(T_{\mu,\nu}v - v).
+  \end{align}
+\end{lemma}
+
+
+\begin{lemma}[Le super pouvoir de Value Iteration]
+  Soient $v$ et $(\mu,\nu) \in \Pi_c(x)$ tels que $T_{\mu,\nu} v=T^c v$. Alors:
+  \begin{align}
+    v_c(x) = \tilde v_c(x).
+  \end{align}
+\end{lemma}
+
+\begin{proof}
+  \begin{align}
+    \max_{\mu' \in \M_c(x)} \1_x' (v_{\mu'} - v) & =
+    \frac{1}{1-\gamma^c} \max_{\mu' \in \M_c(x)} \1_x'(T_{\mu'}v - v) \\
+    & = \frac{1}{1-\gamma^c} \1_x'(\max_{\mu' \in \M_c(x)}  T_{\mu'}v - v) \\
+    & = \frac{1}{1-\gamma^c} \1_x'(T_{\mu}v - v) \\
+    & = \frac{1}{1-\gamma^c} \1_x'(T^c v - v),
+  \end{align}
+  et symmétriquement pour $$\min_{\nu' \in \N_c(x)}\1_x' (\tilde v_{\nu'} - v),$$ d'où le résultat.
+\end{proof}
+
+
+\section{Conséquences}
+
+
+
+\bibliographystyle{plain}
+\bibliography{biblio.bib} 
+
+\end{document}

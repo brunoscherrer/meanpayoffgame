@@ -1,32 +1,37 @@
 #!/usr/bin/python3
 
-# code for mean payoff games, deterministic mdps
+# code for undiscounted mean payoff games / deterministic mdps
+
+from copy import copy,deepcopy
+import os
+import sys
 
 from random import seed, randint, sample
 import numpy as np
 from fractions import Fraction # for exact calculation
+import math
+
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle,Circle
 import matplotlib.patheffects as path_effects
 import matplotlib.cm as cm
-#import colorsys
-import os
-import sys
+
+import networkx as nx # graph display
 
 
-# useful classes
 
+# undiscounted mean-payoff game model
 
 class state:
 
-    def __init__(self, owner, next_states, cost):
-        self.owner = owner
+    def __init__(self, player, next_states, cost, id):
+        self.player = player
         self.next_states = next_states
         self.cost = cost
+        self.id = id
 
     def print(self):
-        print("owner:",self.owner,"->",self.next_states,"c:",self.cost)
-
+        print("id:", self.id, "player:",self.player,['(MIN)','(MAX)'][self.player],"next_states:",self.next_states,"c:",self.cost)
 
 
 class mp_game:   
@@ -36,26 +41,86 @@ class mp_game:
     def __init__(self, nb_states, param, intmax=100):
 
         self.nb_states = nb_states
-        if isinstance(param,list):    # param provides the model...
+        if isinstance(param,list):    # param provides the model (as a list)
             self.states = param
         else:                         # ... or a number of actions per state
             nb_actions = param
-            self.states = [ state( randint(0,1),   # owner
+            self.states = [ state( randint(0,1),   # player
                                  [randint(0,nb_states-1) for a in range(nb_actions)],   # next states
-                                 randint(0,intmax) )   # costs
+                                   randint(0,intmax),    # costs
+                                   str(i) ) # id
                             for i in range(nb_states) ]
 
     def print(self):
 
         print(self.nb_states,"states")
         for i in range(self.nb_states):
-            print(i,' ',end='')
+            print("State",i,end=": ")
             self.states[i].print()
 
 
-    # policy analysis, policy iteration (1 and 2 players)
+
+    #####
+    # Comparison of value potential
+
+    @staticmethod
+    def better( v1, v2, player ):   # tells if the value-potential v1 is *strictly* better than v2 for Player player
+        if player==0: # min
+            return (v1[0]!=None and v2[0]==None) or (v1[0]!=None and v2[0]!=None and v1[0]<v2[0]) or (v1[0]==v2[0] and v1[1]<v2[1]) 
+        else: # max
+            return (v1[0]!=None and v2[0]==None) or (v1[0]!=None and v2[0]!=None and v1[0]>v2[0]) or (v1[0]==v2[0] and v1[1]>v2[1])
+
+
+    #####
+    # (standard) Value Iteration (on value potential)
+    
+    def value_iteration(self, T, v=None, verbose=False):
+
+        if v==None:
+            v = [(None,0)]*self.nb_states  # initialize to value-potential
+        
+        pol_seq = []
+        v_seq = []
+        
+        for t in range(T-1,-1,-1):
+
+            pol = []
+            v2 = []
             
-    def analyze_policy(self, pol, verbose=False): # returns paths and cycles for each starting state
+            for i in range(self.nb_states):
+
+                s = self.states[i]
+                player = s.player
+
+                qopt = [(None, np.infty),(None, -np.infty)][player]
+                aopt=-1
+                for a in range(len(s.next_states)):
+                    q =  v[ s.next_states[a] ] 
+                    if self.better(q,qopt,player):
+                        qopt,aopt = q,a
+                        
+                pol.append( aopt )
+                if qopt[0]!=None:
+                    v2.append( ( qopt[0], s.cost-qopt[0] + qopt[1]) )
+                else:
+                    v2.append( ( None, s.cost + qopt[1] ) )
+
+            if verbose:
+                print("pol=",pol)
+                print("v=",pvp(v))
+                    
+            v_seq.insert(0,v2)
+            pol_seq.insert(0,pol)
+
+            v = v2
+        
+        return v_seq, pol_seq  
+
+
+    ######
+    # (standard) Policy Iteration
+
+    def analyze_policy(self, pol, verbose=False): # Find paths and cycles of a joint policy pol (used by policy iteration to compute the value)
 
         cycles = [] # list of cycles
 
@@ -123,32 +188,31 @@ class mp_game:
                 
         return cycles, c_v, path, p_v, cycle
 
-
-    def value_potential(self, pol): # compute the value and potential of a policy (useful for PI)
+    
+    def value_potential(self, pol): # compute the value and potential of a joint policy pol
 
         v = []
         cycles, c_v, path, p_v, cycle = self.analyze_policy(pol)
         for i in range(self.nb_states):
             av = c_v[ cycle[i] ]
             v.append( (av, p_v[i] - av*len(path[i])) ) 
-            #print('v(',i,')=',v[i])
             
-        return(v)
-
+        return v
     
     
-    def pi_greedy_policy(self, v, pol, player):
+    def greedy_policy(self, v, pol, players):
         
         pol2 = pol[:] # copy
 
         for i in range(self.nb_states):
-            state = self.states[i]
-            if state.owner==player: 
+            s = self.states[i]
+            player = s.player
+            if player in players:
                 aopt = pol[i]   # initialise with current policy
-                qopt = v[ state.next_states[aopt] ]  # and value
-                for a in range(len(state.next_states)):
-                    q = v[ state.next_states[a] ]
-                    if (player==0 and (q[0]<qopt[0] or (q[0]==qopt[0] and q[1]<qopt[1]))) or (player==1 and (q[0]>qopt[0] or (q[0]==qopt[0] and q[1]>qopt[1]))):
+                qopt = v[ s.next_states[aopt] ]  # and value
+                for a in range(len(s.next_states)):
+                    q = v[ s.next_states[a] ]
+                    if self.better(q, qopt, player):
                         qopt, aopt = q, a
                 pol2[i] = aopt
                     
@@ -175,7 +239,7 @@ class mp_game:
                 policy_list.append(pol)
             
             # greedy step (for the states of the player who optimizes)
-            pol = self.pi_greedy_policy(v, pol, player)
+            pol = self.greedy_policy(v, pol, [player])
             
             v2 = v
 
@@ -199,72 +263,249 @@ class mp_game:
                 break
             
             # greedy step (for the states of the player who optimizes)
-            pol = self.pi_greedy_policy(v, pol, player)
+            pol = self.greedy_policy(v, pol, [player])
             
             v2 = v
 
         return v, pol
 
     
-    # value iteration
-    
-    def value_iteration(self, T, v=[]):
-        
-        if v==[]:
-            v = [0]*self.nb_states
+    #####################
+    ### The algorithm
 
-        pol_seq = []
-        v_seq = []
-        
-        for t in range(T-1,-1,-1):
-
-            pol = []
-            v2 = []
-            
-            for i in range(self.nb_states):
-
-                state = self.states[i]
-                owner = state.owner
-
-                lv =  [ v[ state.next_states[a] ]  for a in range(len(state.next_states)) ]
-                if state.owner == 0:
-                    qopt = min( lv )
-                elif state.owner == 1:
-                    qopt = max( lv )
-                    
-                pol.append( lv.index(qopt) )
-                v2.append( state.cost + qopt )
-                
-            v_seq.append(v2)
-            pol_seq.append(pol)
-
-            v = v2
-
-        pol_seq.reverse() # put it in the right order
-        
-        return v_seq, pol_seq  
-
-
-    def trajectory(self, i, pol_seq): # generate a trajectory from finite horizon policy pol_seq
+    def trajectory(self, i, pol_seq): # generate a trajectory from finite horizon policy pol_seq 
 
         traj = [i]
         for t in range(len(pol_seq)): # backward in time
             i = self.states[i].next_states[ pol_seq[t][i] ]
             traj.append(i)
         return traj
+
+
+    def cycle_id(self, cycle):
+
+        s=""
+        for i in cycle[:-1]:
+            id = self.states[i].id
+            s += id+"-"
+        s += self.states[cycle[-1]].id
+        return s
+            
+    
+    def algo(self, verbose=False):
+
+        # initialize
+        nb_states = self.nb_states
+        states_list = [ [i] for i in range(nb_states) ] 
+        real_states = list(range(nb_states))
         
-
-    def get_ax(self):
-
-        fig = plt.figure(figsize=(8,8))
-        ax = fig.add_subplot(111)
-        ax.axis('off')
-        return(ax)
-
-    def savefig_and_close(self,f):
+        # list of cycles discovered by the algorithm
+        cycle_list = []
+        av_costs_list = []
         
-        plt.savefig(f)
-        plt.close()
+        while(True):
+
+            if verbose:
+                print("List of cycles found so far:",cycle_list)
+                print("Average costs:",av_costs_list)
+                
+                
+            # Part 1: make the game from the list of states (determining the proper transition regarding memory)
+            param = []
+            for i in range(nb_states):
+                
+                if real_states[i]==None:      # if terminal state-cycle
+                    j = cycle_list.index( states_list[i] )
+                    param.append( state( 0, [i], av_costs_list[j], self.cycle_id( states_list[i] ) )  )
+
+                else: # usual states
+                    s = self.states[ real_states[i] ]
+                    ns = []
+                    for a in range(len(s.next_states)):       # find 
+                        s2 = states_list[i]+[ s.next_states[a] ]
+                        while True:
+                            if s2 in states_list:
+                                ns.append( states_list.index(s2) )
+                                break
+                            del s2[0]
+                    param.append( state( s.player, ns, s.cost, self.cycle_id( states_list[i] ) ) )
+
+            m = mp_game( nb_states, param ) 
+
+            if verbose:
+                m.print()
+                print("List of states:",states_list)
+                #m.plot_graph(get_ax())
+                #plt.show()
+
+
+            # Part 2: find new cycles and add them
+            
+            cycles, av_costs, pol_seq, v = self.find_new_cycles(m, self.nb_states, states_list, real_states, cycle_list, av_costs_list, verbose=verbose )
+
+            if cycles==[]:
+                break
+
+            cycle_list += cycles
+            av_costs_list += av_costs
+            
+            for i in range(len(cycles)):
+
+                c = cycles[i]
+                
+                # add cycle to model
+                if verbose: print("=> Found new cycle",c,"with average cost", av_costs[i])
+                        
+                nb_states += 1
+                states_list.append(c)
+                real_states.append(None) # cycle does not correspond to any ground state 
+
+                # add paths-to-cycle to model (if necessary)
+                for j in range(len(c)-1,0,-1):
+
+                    c2 = c[:j]
+                    if c2 not in states_list:
+                        nb_states += 1
+                        states_list.append(c2)
+                        real_states.append(c2[-1])
+
+
+        return(v[0:self.nb_states],pol_seq[0][0:self.nb_states])
+    
+
+    # procedure to find cycles of length c involving x
+
+    def find_new_cycles(self, m, N, states_list, real_states, cycle_list, av_costs_list, verbose=False): # N is the number of real states
+
+        # initialize to value-potential
+        v = []
+        for i in range(m.nb_states): #####
+            if real_states[i] == None:  # if state is a cycle
+                j = cycle_list.index( states_list[i] )
+                v.append( (av_costs_list[j], 0) )
+            else:
+                v.append( (None,0) )
+                
+        cycles = []
+        av_costs = []
+        
+        pol_seq = []
+
+        if verbose:
+            print("* Find new cycles from terminal value v=", pvp(v) )
+        
+        for t in range(2*N): 
+
+            pol = []
+            v2 = []
+            
+            for i in range(m.nb_states):  # VI-step
+
+                s = m.states[ i ]
+                player = s.player
+
+                qopt = [(None, np.infty),(None, -np.infty)][player]
+                aopt=-1
+                for a in range(len(s.next_states)):
+                    q =  v[ s.next_states[a] ] 
+                    if self.better(q,qopt,player):
+                        qopt,aopt = q,a
+                        
+                pol.append( aopt )
+                if qopt[0]!=None:
+                    v2.append( ( qopt[0], s.cost-qopt[0] + qopt[1]) )
+                else:
+                    v2.append( ( None, s.cost + qopt[1] ) )
+
+            if verbose:
+                #print("pol=",pol)
+                print("v=",pvp(v))
+
+            pol_seq.insert(0,pol)
+                
+            v = v2
+            
+            for i in range(N):   # identification of cycle
+
+                traj = self.trajectory(i, pol_seq)
+                traj = [ real_states[x] for x in traj ] # get trajectory on ground states
+                
+                #if verbose: print(traj)
+                
+                if i in traj[1:]:                     # detect cyle
+                    s = traj[1:].index(i) + 1         
+                    c = traj[:s+1]                    # corresponding cycle
+                    av_cost = Fraction( sum( [self.states[traj[j]].cost for j in range(s)] ), s )
+                    if c not in cycle_list:  # new cycle ?
+                        cycles.append(traj[:s+1])
+                        av_costs.append( av_cost )
+
+            if cycles!=[]: # leaves as soon as at least one new cycle is found
+                break
+
+        return cycles, av_costs, pol_seq, v
+
+
+    
+    def plot_graph(self, ax, pol=None): # plot a stationary policy
+            
+        NS=1000
+        
+        g = nx.DiGraph()
+        labels={}
+        
+        for i in range(self.nb_states):
+            s = self.states[i]
+            id = s.id
+            labels[id]=id
+            for j in s.next_states:
+                s2 = self.states[j]
+                g.add_edge(id, s2.id)
+                
+
+        # pos = nx.spring_layout(g, pos=pos, fixed=fixed, iterations=50)
+        pos = nx.kamada_kawai_layout(g)
+
+        nodes = nx.draw_networkx_nodes(g, pos,  ax=ax, nodelist=[ x.id for x in self.states if x.player==0 ], node_size=NS, node_shape='s', alpha=1, node_color='w')
+        nodes.set_edgecolor('k')
+        nodes = nx.draw_networkx_nodes(g, pos,  ax=ax, nodelist=[ x.id for x in self.states if x.player==1 ], node_size=NS, node_shape='o', alpha=1, node_color='w')
+        nodes.set_edgecolor('k')
+        nx.draw_networkx_edges(g, pos,  ax=ax, node_size=NS, edge_color='lightgrey')
+        if pol!=None:
+            nx.draw_networkx_edges(g, pos,  ax=ax, edgelist=[ (self.states[i].id, self.states[ self.states[i].next_states[pol[i]] ].id) for i in range(self.nb_states) ], node_size=NS, edge_color='k')
+        nx.draw_networkx_labels(g, pos, labels,  ax = ax, font_size=NS/150)
+
+        plt.tight_layout()
+    
+        
+### Mean payoff game on a grid structure
+
+
+class planar_mp_game(mp_game):
+
+    def __init__(self, lx, ly, nb_actions, intmax=100):
+
+        param = []
+        for x in range(lx):
+            for y in range(ly):
+                neighbors=[]
+                for dx in [-1,0,1]:
+                    for dy in [-1,0,1]:
+                        x2,y2 = x+dx,y+dy
+                        if (dx,dy)!=(0,0) and 0<=x2<lx and 0<=y2<ly:
+                            neighbors.append(x2*ly+y2)
+                i=x*ly+y
+                param.append( state( randint(0,1),  sample(neighbors, min(nb_actions,len(neighbors))),  pow(2,randint(0,intmax)), str(i)  ) )
+
+        super().__init__(lx*ly, param)
+
+        # for graphical display
+        
+        self.pos=dict()
+        for x in range(lx):
+            for y in range(ly):
+                self.pos[x*ly+y]=(x,y)    
+        self.range=(lx,ly)
 
         
     def plot_cycle_regions(self, ax, cycles,cycle,c_v):
@@ -288,7 +529,7 @@ class mp_game:
 
         plt.tight_layout()
             
-    def plot_graph(self, ax, pol): # plot a stationary policy
+    def plot_graph(self, ax, pol=None): # plot a stationary policy
 
         lx,ly=self.range
 
@@ -298,25 +539,29 @@ class mp_game:
 
         for i in range(self.nb_states):
             x,y = self.pos[i]
-            state = self.states[i]
-            if state.owner==0:
+            s = self.states[i]
+            if s.player==0:
                 ax.add_patch(Circle( (x,y), RAYON, fill=0, edgecolor='black') )
             else:
                 ax.add_patch(Rectangle( (x-RAYON,y-RAYON), 2*RAYON,2*RAYON, fill=0, edgecolor='black') )
-            ax.text(x,y,str(state.cost),va='center',ha='center')
-            for j in state.next_states:
-                state2 = self.states[j]
+            ax.text(x,y,str(s.cost),va='center',ha='center')
+            for j in s.next_states:
                 x2,y2 = self.pos[j]
-                dx,dy=x2-x,y2-y
-                if pol!=None and state.next_states[ pol[i] ]==j:
-                    plt.arrow( x+RAYON*dx, y+RAYON*dy, dx/2.5, dy/2.5, color='black',lw=1, head_width=0.1,zorder=1)
+                dx,dy = x2-x,y2-y
+                col = ['blue','red'][s.player]
+                r=RAYON/math.sqrt(dx*dx+dy*dy)
+                if pol!=None and s.next_states[ pol[i] ]==j:
+                    plt.arrow( x+r*dx, y+r*dy, dx*(1-2.7*r), dy*(1-2.7*r),lw=1, head_width=0.1,zorder=1, color=col)
                 else:
-                    plt.arrow( x+RAYON*dx, y+RAYON*dy, dx/2.5, dy/2.5, color='black', alpha=0.1, lw=1, head_width=0.1,zorder=0)
+                    plt.arrow( x+r*dx, y+r*dy, dx/2.5, dy/2.5, alpha=0.1, lw=1, head_width=0.1,zorder=0, color=col)
 
         plt.tight_layout()
-                    
+
+        
     def plot_trajectory(self, ax, traj, T=None, color='black'):
 
+        RAYON=0.1 #0.25
+        
         l = len(traj)
         if T==None:
             T=l
@@ -326,36 +571,16 @@ class mp_game:
         for t in range(l):
             x,y = self.pos[ traj[t] ]
             angle = (T-t)*dec
-            lx.append(x+0.25*np.cos(angle))
-            ly.append(y+0.25*np.sin(angle))
-
-        plt.plot(lx,ly, color=color, lw=2, path_effects=[path_effects.Stroke(linewidth=3, foreground='black'), path_effects.Normal()])
+            lx.append(x+RAYON*np.cos(angle))
+            ly.append(y+RAYON*np.sin(angle))
+            if t>0:
+                plt.arrow( lx[-2],ly[-2],(lx[-1]-lx[-2])*0.9,(ly[-1]-ly[-2])*0.9, head_width=0.1, color=color, lw=2 )
+        
+        #plt.plot(lx,ly, color=color, lw=2, path_effects=[path_effects.Stroke(linewidth=3, foreground='black'), path_effects.Normal()])
 
         plt.tight_layout()
-                
-def planar_mp_game(lx, ly, nb_actions, intmax=100):
 
-    param = []
-    for x in range(lx):
-        for y in range(ly):
-            neighbors=[]
-            for dx in [-1,0,1]:
-                for dy in [-1,0,1]:
-                    x2,y2 = x+dx,y+dy
-                    if (dx,dy)!=(0,0) and 0<=x2<lx and 0<=y2<ly:
-                        neighbors.append(x2*ly+y2)
-            i=x*ly+y
-            param.append( state( randint(0,1),  sample(neighbors, min(nb_actions,len(neighbors))),  pow(2,randint(0,intmax))  ) )
 
-    g =  mp_game(lx*ly, param)
-    g.pos=dict()
-    for x in range(lx):
-        for y in range(ly):
-            g.pos[x*ly+y]=(x,y)
-    g.range=(lx,ly)
-            
-    return ( g )
-        
 
 
 def parity_game(nb_states, nb_actions, nb_priorities):
@@ -372,118 +597,23 @@ def parity_game(nb_states, nb_actions, nb_priorities):
             
     return g
 
-
-
-def test_1():
-
-    for i in range(0,10000):
-        seed(i)
-        g = mp_game(20,4,100)
-        #g.print()
-        v,pol = g.policy_iteration(player=1)
-        cycles, c_v, path, p_v, cycle = g.analyze_policy( pol )
-        if len(cycles)>5:
-            print(i)
-            g.print()
-            print('policy:',pol)
-            cycles, c_v, path, p_v, cycle = g.analyze_policy( pol, verbose=True )
-
-
-def test_2():
-
-    x,y = 4,4   
-    max_len=0
-
-    os.system('rm pi/*')
-    
-    for i in range(10000):
-        print(i,end='\r')
-        seed(i)
-        g=planar_mp_game(x,y,3,20)
-        policy_list = []
-        v,pol = g.policy_iteration(player=1,  policy_list=policy_list)
-
-        if len(policy_list) >= max_len:
-            max_len = len(policy_list)
-            cycles, c_v, path, p_v, cycle = g.analyze_policy( pol )
-            print('PI visited',len(policy_list),'policies (',len(cycles),'cycles (seed=',i,')')
-            print('Saves:',end='')
-            j=0
-            for pol in policy_list:
-                print(j,end=',')
-                sys.stdout.flush()
-                cycles, c_v, path, p_v, cycle = g.analyze_policy( pol )
-                ax = g.get_ax()
-                g.plot_cycle_regions(ax, cycles,cycle,c_v)
-                g.plot_graph(ax, pol)
-                g.savefig_and_close("pi/%d_%03d.png"%(i,j))
-                j+=1
-            print()
-
-
-def test_3():
-    
-    X = True
-
-    for sd in [2]:#range(100):
-
-        x,y = 5,5
-        seed(sd)
-        print('seed:',sd)
-
-        g=planar_mp_game(x,y,3,20)
-
-        # résolution exacte par PI et détermination des cycles optimaux
-        v,pol = g.policy_iteration(player=1)
-        cycles, c_v, path, p_v, cycle = g.analyze_policy( pol )
-
-
-        if X:
-            os.system('rm vi/*')
-            ax = g.get_ax()
-            g.plot_cycle_regions(ax, cycles, cycle, c_v)
-            g.plot_graph(ax, pol)
-            g.savefig_and_close("vi/opt.png")
-
-        # résolution par VI
-        T = 1000
-        v_seq, pol_seq = g.value_iteration(T)
-
-        if X:
-            ord = np.argsort(c_v)
-            cmap = cm.get_cmap('autumn')
-            if len(cycles)==1:
-                colors = [ cmap(0.5) ]
-            else:
-                colors = [ cmap( float(ord[i])/(len(cycles)-1) )  for i in range(len(cycles)) ]
-
-
-        for c in cycles:
-            i=c[0]
-            traj = g.trajectory(i, pol_seq )
-            if traj[:len(c)]!=c:
-                print(traj,c)    ############################## faire de l'analyse de chemin...
-
-        if X:
-
-            for t in range(1,T):
-
-                print(t,',',end='')
-                sys.stdout.flush()
-                
-                ax = g.get_ax()
-                g.plot_cycle_regions(ax, cycles, cycle, c_v)
-
-                for j in range(len(cycles)):
-                    i=cycles[j][0]
-                    traj = g.trajectory(i, pol_seq[T-t:])
-                    g.plot_trajectory(ax, traj, T=T, color=colors[j])
-                    g.plot_graph(ax, pol_seq[T-t])
-
-                plt.savefig("vi/%03d.png"%t)
-                plt.close()
+##############################################################
 
 
 
 
-test_3()
+def pvp(v): # printable value-potential
+    return list(map(lambda x:(float(x[0]) if x[0]!=None else None,float(x[1])),v))        
+
+
+def get_ax():
+
+    fig = plt.figure(figsize=(10,10))
+    ax = fig.add_subplot(111)
+    ax.axis('off')
+    return(ax)
+
+def savefig_and_close(f):
+        
+    plt.savefig(f)
+    plt.close()

@@ -1,0 +1,182 @@
+\documentclass{article}
+\usepackage{fullpage}
+\usepackage[utf8x]{inputenc}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{amsmath}
+\usepackage{hyperref}
+\usepackage{cleveref}
+\usepackage{autonum}
+\usepackage{dsfont}
+\usepackage{stmaryrd}
+
+\newtheorem{theorem}{Théorème}
+\newtheorem{lemma}{Lemme}
+\newtheorem{remark}{Remarque}
+\newtheorem{corollary}{Corollaire}
+
+
+\def\1{{\mathds 1}}
+\def\G{{\cal G}}
+\def\C{{\cal C}}
+\def\V{{\cal V}}
+\def\Ent{\mathbb N}
+\def\R{\mathbb R}
+\def\N{\mathfrak N}
+\def\M{\mathfrak M}
+\def\greed{\mathfrak G}
+\newcommand{\suc}[1]{f(#1)}
+
+\def\={\stackrel{def}{=}}
+\newcommand{\intset}[1]{\llbracket #1 \rrbracket}
+\newcommand{\intpart}[1]{\lceil #1 \rceil}
+
+\begin{document}
+
+
+
+
+\paragraph{Notations:}
+\begin{align}
+  v_{\mu,\nu} = (T_{\mu,\nu})^\infty
+\end{align}
+
+\paragraph{Algo PI standard:} on choisit $\mu_{k+1}$ tel que
+\begin{align}
+ T_{\mu_{k+1}} (T_{\mu_{k}})^\infty = T (T_{\mu_{k}})^\infty
+\end{align}
+Alors, la preuve de la croissance de PI est:
+\begin{align}
+  (T_{\mu_{k+1}})^\infty - (T_{\mu_k})^\infty & = \sum_{i=0}^{\infty} (T_{\mu_{k+1}})^{i+1} (T_{\mu_k})^\infty - (T_{\mu_{k+1}})^{i} (T_{\mu_k})^\infty \\
+  & = \sum_{i=0}^{\infty} (T_{\mu_{k+1}})^{i} T (T_{\mu_k})^\infty - (T_{\mu_{k+1}})^{i} T_{\mu_k} (T_{\mu_k})^\infty \\
+  & \ge 0
+\end{align}
+par monotonicité de $(T_{\mu_{k+1}})^{i}$.
+
+La preuve de l'optimalité est: Supposons que $T_{\mu_{k+1}} (T_{\mu_{k}})^\infty = (T_{\mu_{k}})^\infty$. Alors,
+\begin{align}
+  (T_{\mu_{k}})^\infty = T (T_{\mu_{k}})^\infty.
+\end{align}
+
+
+\def\muc{\mu^c}
+\def\nuc{\nu^c}
+
+\paragraph{Idée de l'algo:}
+On a $\mu$ politique stationnaire du joueur MAX, $\nu$ meilleur réponse à $\mu$:
+\begin{align}
+  (T_{\mu,\nu})^\infty = T_{\mu}^\infty.
+\end{align}
+On cherche un couple de politiques $\mu^m = (\mu_1,\mu_2,\dots,\mu_m)$ et $\nu^m = (\nu_1,\nu_2,\dots,\nu_m)$, un état $x$ et $c \le m$, tels que:
+\begin{align}
+  T_{\muc,\nuc}  \left[ T^{m-c} (T_{\mu})^\infty \right] & = T^c \left[ T^{m-c} (T_{\mu})^\infty \right], \\
+  \1_x' P_{\muc,\nuc} & = \1_x',\\
+  \1_x' T_{\muc,\nuc} \left[ T^{m-c} (T_{\mu})^\infty \right] & > \1_x' \left[ T^{m-c} (T_{\mu})^\infty \right].
+\end{align}
+
+\paragraph{Croissance}
+On a:
+\begin{align}
+  (T_\mu)^\infty & = T_\mu (T_\mu)^\infty \\
+  & \le T (T_\mu)^\infty \\
+  & \dots \\
+  &  \le T^{m-c} (T_\mu)^\infty \\
+  & \le T^m (T_\mu)^\infty.
+\end{align}
+Alors,
+\begin{align}
+  ( T_{\muc,\nuc} )^\infty -  (T_\mu)^\infty &\ge  ( T_{\muc,\nuc} )^\infty - T^{m-c} (T_{\mu})^\infty \\
+  & =  \sum_{i=0}^{\infty} ( T_{\muc,\nuc} )^{i+1} T^{m-c} (T_{\mu})^\infty - ( T_{\muc,\nuc} )^{i} T^{m-c} (T_{\mu})^\infty \\
+  & = \sum_{i=0}^{\infty} ( T_{\muc,\nuc} )^{i} T^c T^{m-c} (T_{\mu})^\infty - ( T_{\muc,\nuc} )^{i} T^{m-c} (T_{\mu})^\infty \\
+  & \ge 0
+\end{align}
+par monotonicité de $( T_{\muc,\nuc} )^{i}$.
+
+
+\paragraph{Propriétés du cycle trouvé}
+
+
+Soit $v$ une fonction quelconque. Pour tout $\bar\muc$ et $\bar\nuc$. 
+\begin{align}
+  %(T_{\bar\muc})^\infty - T^{m-c} (T_\mu)^\infty &=
+  (T_{\bar\muc,\bar\nuc})^\infty - v %\\
+  & =\sum_{i=0}^{\infty} (T_{\bar\muc,\bar\nuc})^{(i+1)} v - (T_{\bar\muc,\bar\nuc})^{i} v\\
+  & = \sum_{i=0}^{\infty} (T_{\bar\muc,\bar\nuc})^{i} (T_{\bar\muc,\bar\nuc}) v - (T_{\bar\muc,\bar\nuc})^{i} v \\
+  & = \sum_{i=0}^{\infty} (\gamma P_{\bar\muc,\bar\nuc})^{i}  ( (T_{\bar\muc,\bar\nuc}) v  - v).
+\end{align}
+Si $x$ est tel que $1_x' (P_{\bar\muc,\bar\nuc}) = 1_x'$, alors:
+\begin{align}
+  1_x' \left[ (T_{\bar\muc,\bar\nuc})^\infty - v \right] & = \frac{1_x'}{1-\gamma^c}  \left[ (T_{\bar\muc,\bar\nuc}) v - v \right], \\
+\end{align}
+c'est-à-dire:
+\begin{align}
+ 1_x' (T_{\bar\muc,\bar\nuc})^\infty & = \frac{  1_x' [(T_{\bar\muc,\bar\nuc}) 0 ] }{1-\gamma^c}.
+\end{align}
+
+Notons:
+\begin{align}
+\M_c(x) & = \left\{ \muc ~;~ \1_x' P_{\muc} = 1'_x \right\}. \\
+%\N_c(x) & = \left\{ \nuc ~;~ \1_x' \tilde P_{\nuc} = \1'_x \right\}
+\end{align}
+
+On a:
+\begin{align}
+1_x' \left[ \max_{\bar\muc \in \M_c(x)} \min_{\bar\nuc} (T_{\muc,\nuc})^\infty \right] = \frac{ 1_x' [ \max_{\bar\muc \in \M_c(x)} \min_{\bar\nuc} (T_{\bar\muc,\bar\nuc}) 0 ] }{1-\gamma^c}.
+\end{align}
+
+ 
+
+Si les deux joueurs trouvent ensemble un cycle, cela signifie que le joueur MAX peut imposer le cycle à MIN si MIN reste sur le cycle limite.
+Sinon, MIN peut dégrader (réduire le bassin d'attraction du cycle) pour aller vers un autre cycle limite.
+S'il n'y a pas d'autre cycle limite, MIN ne peut qu'accepter le cycle proposé par MAX (et dans ce cas, on avance d'un coup !)
+
+
+\section{Algorithme en 2 phases}
+
+Notations
+\begin{align}
+ \forall \mu \in \Pi_{max}^c,~ \nu_{*,c}(\mu) &= \arg\min_{\nu \in \tilde P^c} \left\{\nu ; v_\mu = v_{\mu,\nu} \right\}\\
+  \C_{x,c} & = \{ \mu \in \Pi^c ~;~ \1_x' P_{\mu,\nu_{*,c}(\mu)} = \1_x' \},\\
+ \forall v \in \R^n,~ \G_{x,c}(v) & = \{ \mu \in \C_{x,c} ~;~ T_\mu v = T^c v\},\\
+  \V_{x,c} & = \left\{ v \in \R^n ~;~ \G_{x,c}(v) \in \C_{x,c} \right\}.
+\end{align}
+
+Propriété fondamentale
+\begin{lemma}
+  Pour tout $x,c$, l'ensemble
+  $$
+  \G_{x,c}(\V_{x,c})=\left\{ \G_{x,c}(v); v \in \V_{x,c} \right\}
+$$
+  contient au plus un élément.
+\end{lemma}
+Notons $v_{x,c}=v_{\G_{x,c}}(x)$.
+
+Algorithme:
+
+1) on calcule les $v_{x,c}$;
+
+en résolvant un problème $c$-pas forcé à partir et à arriver en $x$.
+
+il se peut que ce problème n'ait pas de solution possible (pas de chemin).
+
+
+pour les noeuds max, on a une sur-estimation de la valeur $v_*$.
+
+pour les noeuds min, on a une sous-estimation.
+
+
+2) on en déduit en utilisant le fait que
+$$
+v_* = T^n w
+$$
+avec
+\begin{align}
+  w(x) & = O_{a,c} r(x,a) + \gamma v_{f(x,a),c}.
+\end{align}
+
+Preuve:  $T^n w \le v_*$. 
+
+\bibliographystyle{plain}
+\bibliography{biblio.bib} 
+
+\end{document}
