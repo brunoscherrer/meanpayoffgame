@@ -369,6 +369,9 @@ class mp_game:
                         states_list.append(c2)
                         real_states.append(c2[-1])
 
+        
+        print("List of cycles used")
+        print(cycle_list)
 
         return(v[0:self.nb_states],pol_seq[0][0:self.nb_states])
     
@@ -394,7 +397,7 @@ class mp_game:
         if verbose:
             print("* Find new cycles from terminal value v=", pvp(v) )
         
-        for t in range(2*N): 
+        for t in range(N+1): 
 
             pol = []
             v2 = []
