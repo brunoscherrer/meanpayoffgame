@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-# code for undiscounted mean payoff games / deterministic mdps
+# code for undiscounted mean payoff games
 
 from copy import copy,deepcopy
 import os
@@ -16,7 +16,7 @@ from matplotlib.patches import Rectangle,Circle
 import matplotlib.patheffects as path_effects
 import matplotlib.cm as cm
 
-import networkx as nx # graph display
+import networkx as nx # graph display (to illustrate & debug)
 
 
 
@@ -300,18 +300,47 @@ class mp_game:
         states_list = [ [i] for i in range(nb_states) ] 
         real_states = list(range(nb_states))
         
-        # list of cycles discovered by the algorithm
-        cycle_list = []
-        av_costs_list = []
+        # Initialization with the cycles of any policy
+        pol = [0]*self.nb_states
+        cycles, av_costs, _,_,_ = self.analyze_policy(pol,verbose=verbose)
+        for i in range(len(cycles)):
+            cycles[i].append(cycles[i][0]) # close the loop
+        if verbose: print("Initialization with policy:",pol,"\n")
+
+        cycle_list, av_costs_list = [],[]
         
         while(True):
 
+            # Part 1: make the game from the list of states (determining the proper transition regarding memory)
+            
+            cycle_list += cycles
+            av_costs_list += av_costs
+            
+            for i in range(len(cycles)):
+
+                c = cycles[i]
+                
+                # add cycle to model
+                if verbose: print("=> Found new cycle",c,"with average cost", av_costs[i])
+                        
+                nb_states += 1
+                states_list.append(c)
+                real_states.append(None) # cycle does not correspond to any ground state 
+
+                # add paths-to-cycle to model (if necessary)
+                for j in range(len(c)-1,0,-1):
+
+                    c2 = c[:j]
+                    if c2 not in states_list:
+                        nb_states += 1
+                        states_list.append(c2)
+                        real_states.append(c2[-1])
+            
             if verbose:
                 print("List of cycles found so far:",cycle_list)
                 print("Average costs:",av_costs_list)
-                
-                
-            # Part 1: make the game from the list of states (determining the proper transition regarding memory)
+            
+            # build the model
             param = []
             for i in range(nb_states):
                 
@@ -336,8 +365,8 @@ class mp_game:
             if verbose:
                 m.print()
                 print("List of states:",states_list)
-                #m.plot_graph(get_ax())
-                #plt.show()
+                m.plot_graph(get_ax())
+                plt.show()
 
 
             # Part 2: find new cycles and add them
@@ -346,29 +375,6 @@ class mp_game:
 
             if cycles==[]:
                 break
-
-            cycle_list += cycles
-            av_costs_list += av_costs
-            
-            for i in range(len(cycles)):
-
-                c = cycles[i]
-                
-                # add cycle to model
-                if verbose: print("=> Found new cycle",c,"with average cost", av_costs[i])
-                        
-                nb_states += 1
-                states_list.append(c)
-                real_states.append(None) # cycle does not correspond to any ground state 
-
-                # add paths-to-cycle to model (if necessary)
-                for j in range(len(c)-1,0,-1):
-
-                    c2 = c[:j]
-                    if c2 not in states_list:
-                        nb_states += 1
-                        states_list.append(c2)
-                        real_states.append(c2[-1])
 
         
         print("List of cycles used") # sort list by starting state
@@ -379,6 +385,7 @@ class mp_game:
                     print(c, '(', av_costs_list[j], ')', end=' ')
                 j+=1
             print('')
+
 
         exit(1)
             
@@ -408,7 +415,7 @@ class mp_game:
         if verbose:
             print("* Find new cycles from terminal value\nv=", pvp(v) )
         
-        for t in range(N+1): 
+        for t in range(N): 
 
             pol = []
             v2 = []
@@ -439,7 +446,7 @@ class mp_game:
                 
             v = v2
             
-            for i in range(m.nb_states):   # identification of cycle
+            for i in range(N):   # identification of cycle: !!! self, not m !!! (very important)
 
                 if real_states[i] != None:
                 
@@ -451,11 +458,11 @@ class mp_game:
                 
                     if verbose: print(traj)
                 
-                    if i in traj[1:]:                     # detect cyle
-                        s = traj[1:].index(i) + 1         
+                    if traj[0] in traj[1:]:                     # detect cyle
+                        s = traj[1:].index(traj[0]) + 1         
                         c = traj[:s+1]                    # corresponding cycle
                         av_cost = Fraction( sum( [self.states[traj[j]].cost for j in range(s)] ), s )
-                        if c not in cycle_list:  # new cycle ?
+                        if c not in cycle_list and c not in cycles:  # new cycle ?
                             cycles.append(traj[:s+1])
                             av_costs.append( av_cost )
 

@@ -2,9 +2,9 @@
 
 from mpg import *
 
-x,y = 4,4
+x,y = 2,2
 
-for i in range(10,1000): # (3,3,22, 2,2,0)
+for i in range(10,1000): # (3,3,22, 2,2,0)  (4,4, 10, puis 11)
 
     print('Seed:',i)
     seed(i)
