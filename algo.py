@@ -15,7 +15,7 @@ for i in range(10,1000): # (3,3,22, 2,2,0)
     v,pol = g.policy_iteration(player=1)
     
     # algorithm
-    v2,pol2 = g.algo()#verbose=True)
+    v2,pol2 = g.algo(verbose=True)
 
     if True:#pol!=pol2:
 

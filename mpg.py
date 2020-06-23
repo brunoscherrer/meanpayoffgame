@@ -30,8 +30,8 @@ class state:
         self.cost = cost
         self.id = id
 
-    def print(self):
-        print("id:", self.id, "player:",self.player,['(MIN)','(MAX)'][self.player],"next_states:",self.next_states,"c:",self.cost)
+    def print(self, end=''):
+        print("id:", self.id, "player:",self.player,['(MIN)','(MAX)'][self.player],"next_states:",self.next_states,"c:",self.cost, end=end)
 
 
 class mp_game:   
@@ -56,7 +56,8 @@ class mp_game:
         print(self.nb_states,"states")
         for i in range(self.nb_states):
             print("State",i,end=": ")
-            self.states[i].print()
+            self.states[i].print(end="/ ")
+            print( [ self.states[k].id for k in self.states[i].next_states ] )
 
 
 
@@ -159,7 +160,7 @@ class mp_game:
                     j = traj.index(i) # beginning index of the cycle
                     c = traj[j:]
 
-                    if traj[j]==min(traj[j:]): # filter by cycles by begin with the minimal state (convention to avoid cycles)
+                    if traj[j]==min(traj[j:]): # filter by cycles that begin with the minimal state (convention)
                     
                         v = Fraction( sum(costs[j:]) , (len(traj)-j ) ) 
                         cycles.append(c)
@@ -370,9 +371,17 @@ class mp_game:
                         real_states.append(c2[-1])
 
         
-        print("List of cycles used")
-        print(cycle_list)
+        print("List of cycles used") # sort list by starting state
+        for i in range(self.nb_states):
+            j=0
+            for c in cycle_list:
+                if c[0]==i:
+                    print(c, '(', av_costs_list[j], ')', end=' ')
+                j+=1
+            print('')
 
+        exit(1)
+            
         return(v[0:self.nb_states],pol_seq[0][0:self.nb_states])
     
 
@@ -384,8 +393,10 @@ class mp_game:
         v = []
         for i in range(m.nb_states): #####
             if real_states[i] == None:  # if state is a cycle
-                j = cycle_list.index( states_list[i] )
-                v.append( (av_costs_list[j], 0) )
+                sl = states_list[i]
+                j = cycle_list.index( sl ) # cycle_list[j] = sl
+                k = sl.index(min(sl))      # position of the state with minimal index (convention)
+                v.append(   ( av_costs_list[j], sum([ self.states[l].cost - av_costs_list[j] for l in range(k) ]) )  )  # value, potential
             else:
                 v.append( (None,0) )
                 
@@ -395,7 +406,7 @@ class mp_game:
         pol_seq = []
 
         if verbose:
-            print("* Find new cycles from terminal value v=", pvp(v) )
+            print("* Find new cycles from terminal value\nv=", pvp(v) )
         
         for t in range(N+1): 
 
@@ -428,20 +439,25 @@ class mp_game:
                 
             v = v2
             
-            for i in range(N):   # identification of cycle
+            for i in range(m.nb_states):   # identification of cycle
 
-                traj = self.trajectory(i, pol_seq)
-                traj = [ real_states[x] for x in traj ] # get trajectory on ground states
+                if real_states[i] != None:
                 
-                #if verbose: print(traj)
+                    traj = m.trajectory(i, pol_seq)
+
+                    if verbose: print(traj,end="/ ")
+                    
+                    traj = [ real_states[x] for x in traj ] # get trajectory on ground states
                 
-                if i in traj[1:]:                     # detect cyle
-                    s = traj[1:].index(i) + 1         
-                    c = traj[:s+1]                    # corresponding cycle
-                    av_cost = Fraction( sum( [self.states[traj[j]].cost for j in range(s)] ), s )
-                    if c not in cycle_list:  # new cycle ?
-                        cycles.append(traj[:s+1])
-                        av_costs.append( av_cost )
+                    if verbose: print(traj)
+                
+                    if i in traj[1:]:                     # detect cyle
+                        s = traj[1:].index(i) + 1         
+                        c = traj[:s+1]                    # corresponding cycle
+                        av_cost = Fraction( sum( [self.states[traj[j]].cost for j in range(s)] ), s )
+                        if c not in cycle_list:  # new cycle ?
+                            cycles.append(traj[:s+1])
+                            av_costs.append( av_cost )
 
             if cycles!=[]: # leaves as soon as at least one new cycle is found
                 break
