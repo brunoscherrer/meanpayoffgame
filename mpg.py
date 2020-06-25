@@ -387,7 +387,7 @@ class mp_game:
             print('')
 
 
-        exit(1)
+        #exit(1)
             
         return(v[0:self.nb_states],pol_seq[0][0:self.nb_states])
     
@@ -403,7 +403,8 @@ class mp_game:
                 sl = states_list[i]
                 j = cycle_list.index( sl ) # cycle_list[j] = sl
                 k = sl.index(min(sl))      # position of the state with minimal index (convention)
-                v.append(   ( av_costs_list[j], sum([ self.states[l].cost - av_costs_list[j] for l in range(k) ]) )  )  # value, potential
+                print('*** sl=',sl,'j=',j, 'k=',k,  av_costs_list[j], [ self.states[sl[l]].cost - av_costs_list[j] for l in range(k) ])
+                v.append(   ( av_costs_list[j], sum([ self.states[sl[l]].cost - av_costs_list[j] for l in range(k) ]) )  )  # value, potential
             else:
                 v.append( (None,0) )
                 
@@ -415,7 +416,7 @@ class mp_game:
         if verbose:
             print("* Find new cycles from terminal value\nv=", pvp(v) )
         
-        for t in range(N): 
+        for t in range(N+1): # N+1 to be able to cycle before entering a cycle 
 
             pol = []
             v2 = []
@@ -446,13 +447,13 @@ class mp_game:
                 
             v = v2
             
-            for i in range(N):   # identification of cycle: !!! self, not m !!! (very important)
+            for i in range(m.nb_states):   # m, not self!
 
-                if real_states[i] != None:
+                if real_states[i] != None: # we do not start in a cyle
                 
                     traj = m.trajectory(i, pol_seq)
 
-                    if verbose: print(traj,end="/ ")
+                    if verbose: print(traj,end=" / ")
                     
                     traj = [ real_states[x] for x in traj ] # get trajectory on ground states
                 
@@ -492,9 +493,9 @@ class mp_game:
         # pos = nx.spring_layout(g, pos=pos, fixed=fixed, iterations=50)
         pos = nx.kamada_kawai_layout(g)
 
-        nodes = nx.draw_networkx_nodes(g, pos,  ax=ax, nodelist=[ x.id for x in self.states if x.player==0 ], node_size=NS, node_shape='s', alpha=1, node_color='w')
+        nodes = nx.draw_networkx_nodes(g, pos,  ax=ax, nodelist=[ x.id for x in self.states if x.player==0 ], node_size=NS, node_shape='o', alpha=1, node_color='w')
         nodes.set_edgecolor('k')
-        nodes = nx.draw_networkx_nodes(g, pos,  ax=ax, nodelist=[ x.id for x in self.states if x.player==1 ], node_size=NS, node_shape='o', alpha=1, node_color='w')
+        nodes = nx.draw_networkx_nodes(g, pos,  ax=ax, nodelist=[ x.id for x in self.states if x.player==1 ], node_size=NS, node_shape='s', alpha=1, node_color='w')
         nodes.set_edgecolor('k')
         nx.draw_networkx_edges(g, pos,  ax=ax, node_size=NS, edge_color='lightgrey')
         if pol!=None:
